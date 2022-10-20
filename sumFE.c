@@ -204,6 +204,39 @@ int _Encrypt(uint8_t * in_msg, uint8_t * pk, uECC_Curve curve, Ciphertext *C){
 
 }
 
+int _Decrypt(uint8_t * sk, uECC_Curve curve, Ciphertext *C){
+    uECC_word_t _priv[NUM_ECC_WORDS];
+    uECC_word_t _inv[NUM_ECC_WORDS];
+
+    uint8_t t1[NUM_ECC_BYTES];
+    uint8_t t2[2 * NUM_ECC_BYTES];
+    uint8_t res[2 * NUM_ECC_BYTES];
+
+    uECC_word_t P[NUM_ECC_WORDS * 2];
+    //uECC_word_t Q[NUM_ECC_WORDS * 2];
+    
+    //Convert uint8_t to uECC_word for the private key
+    uECC_vli_bytesToNative(_priv, sk, BITS_TO_BYTES(curve->num_n_bits));
+
+    //Convert ciphertext parameters to uECC
+    conUint2uECC(C->c1, curve, P);
+    //conUint2uECC(C->c2, curve, Q);
+
+    //compute inverse of the secret key
+    uECC_vli_modInv(_inv, _priv, curve->n, NUM_ECC_WORDS);
+    uECC_vli_nativeToBytes(t1, BITS_TO_BYTES(curve->num_n_bits), _inv);
+    show_str("Inverted Key : ", t1, sizeof(t1));
+
+    //compute t2 = -sP where P = rG
+    genPK(t1, t2, (const uECC_word_t *)P, curve);
+
+    //compute res = -sP + Q 
+    _addPoints(t2, C->c2, res, curve);
+    show_str("Decrypted Message: ", res, sizeof(res));
+    
+    return 1;
+}
+
 
 PROCESS(sum_FE, "Functional Encryption Process");
 AUTOSTART_PROCESSES(&sum_FE);
@@ -232,7 +265,7 @@ PROCESS_THREAD(sum_FE, ev, data){
     show_str("ECC Public Key 1: ", pubKey, sizeof(pubKey));
 
     //Generate random value
-    unsigned int x_i = rand() % 500;
+    unsigned int x_i = 5;
     printf("Generated Plaintext (X_I) = %d\n", x_i);
 
     uint8_t mapX_I[2 * NUM_ECC_BYTES];
@@ -243,6 +276,9 @@ PROCESS_THREAD(sum_FE, ev, data){
     _Encrypt(mapX_I, pubKey, curve, &C1);
     show_str("Ciphertext C1 : ", C1.c1, sizeof(C1.c1));
     show_str("Ciphertext C2 : ", C1.c2, sizeof(C1.c2));
+
+    //uint8_t decrypted_msg[2 * NUM_ECC_BYTES];
+    _Decrypt(secKey, curve, &C1);
 
     PROCESS_END();
 }
