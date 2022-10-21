@@ -3,7 +3,7 @@
 #include "test_ecc_utils.h"
 #include "test_uti.h"
 
-#include <stdio.h>              //For printf
+#include <stdio.h>             
 #include <assert.h> 
 #include <stdlib.h>
 #include <string.h>
@@ -53,30 +53,6 @@ int conUint2uECC(uint8_t *in, uECC_Curve curve, uECC_word_t *out){
 int conuECC2Uint(uECC_word_t *in, uECC_Curve curve, uint8_t *out) {
     uECC_vli_nativeToBytes(out, curve->num_bytes, in);
     uECC_vli_nativeToBytes(out + curve->num_bytes, curve->num_bytes, in + curve->num_words);
-    return 1;
-}
-
-int _addPoints(uint8_t *in1, uint8_t *in2, uint8_t *_out, uECC_Curve curve) {
-    uECC_word_t t1[NUM_ECC_WORDS * 2];
-    uECC_word_t t2[NUM_ECC_WORDS * 2];
-    uECC_word_t _sum[NUM_ECC_WORDS * 2];
-
-    conUint2uECC(in1, curve, t1);
-    conUint2uECC(in2, curve, t2);
-
-	uECC_word_t carry = 0;
-	wordcount_t i;
-	for (i = 0; i < (NUM_ECC_WORDS * 2); ++i) {
-		uECC_word_t sum = t1[i] + t2[i] + carry;
-		uECC_word_t val = (sum < t1[i]);
-		carry = cond_set(val, carry, (sum != t1[i]));
-		_sum[i] = sum;
-	}
-
-    //void uECC_vli_set(uECC_word_t *dest, const uECC_word_t *src, wordcount_t num_words);
-
-    conuECC2Uint(_sum, curve, _out);
-
     return 1;
 }
 
@@ -130,8 +106,6 @@ int genPK(uint8_t *sk, uint8_t *out, const uECC_word_t *P, uECC_Curve curve){
 
     //Convert and store the public key
     conuECC2Uint(_public, curve, out);
-    // uECC_vli_nativeToBytes(out, curve->num_bytes, _public);
-    // uECC_vli_nativeToBytes(out + curve->num_bytes, curve->num_bytes, _public + curve->num_words);
 
     memset(_priv, 0, NUM_ECC_BYTES);
 
@@ -159,8 +133,6 @@ int mapPlainText(uECC_word_t *in, uECC_Curve curve, uint8_t *out) {
 
     //Convert and store the public key
     conuECC2Uint(_public, curve, out);
-    // uECC_vli_nativeToBytes(out, curve->num_bytes, _public);
-    // uECC_vli_nativeToBytes(out + curve->num_bytes, curve->num_bytes, _public + curve->num_words);
     
     return 1;
 }
@@ -195,7 +167,7 @@ int _Encrypt(uint8_t * in_msg, uint8_t * pk, uECC_Curve curve, Ciphertext *C){
     genPK(r, rY, (const uECC_word_t *)Y, curve);
 
     //Print Parameters
-    show_str("rG ", rG, sizeof(rG));
+    show_str("P = (rG) ", rG, sizeof(rG));
     show_str("rY ", rY, sizeof(rY));
 
     //Compute M + rY
@@ -205,10 +177,7 @@ int _Encrypt(uint8_t * in_msg, uint8_t * pk, uECC_Curve curve, Ciphertext *C){
 
     uint8_t res[2 * NUM_ECC_BYTES];
     conuECC2Uint(_tmp3, curve, res); 
-    show_str("Q ", res, sizeof(res));
-
-    // //_addPoints(rY, in_msg, res, curve);
-    // show_str("M_i + rY: ", res, sizeof(res));
+    show_str("Q = (M + rY) ", res, sizeof(res));
 
     //Store Ciphertext into struct
     for (wordcount_t x = 0; x < (2 * NUM_ECC_BYTES); x++){
@@ -240,11 +209,11 @@ int _Decrypt(uint8_t * sk, uECC_Curve curve, Ciphertext *C){
     show_str("Q ", C->c2, sizeof(C->c2));
 
     //compute res = Q - sP
-    uECC_vli_bytesToNative(_tmp1, t1, BITS_TO_BYTES(curve->num_n_bits));
+    conUint2uECC(t1, curve, _tmp1);
     uECC_vli_sub(_tmp2, Q, _tmp1, (NUM_ECC_WORDS * 2));
 
     conuECC2Uint(_tmp2, curve, res); 
-    show_str("M ", res, sizeof(res));
+    show_str("Decrypted f_map(x) ", res, sizeof(res));
     
     return 1;
 }
@@ -277,18 +246,18 @@ PROCESS_THREAD(sum_FE, ev, data){
     show_str("ECC Public Key 1 ", pubKey, sizeof(pubKey));
 
     //Generate random value
-    uECC_word_t x_i = 1;
+    uECC_word_t x_i = rand() % 50;
     printf("Generated Plaintext (X_I) = %d\n", x_i);
 
     uint8_t mapX_I[2 * NUM_ECC_BYTES];
     mapPlainText(&x_i, curve, mapX_I);
-    show_str("M ", mapX_I, sizeof(mapX_I));
+    show_str("f_map(x) ", mapX_I, sizeof(mapX_I));
 
     printf("\n========= ENCRYPTION PARAMETERS =============\n");
     Ciphertext C1;
     _Encrypt(mapX_I, pubKey, curve, &C1);
-    //show_str("Ciphertext C1 : ", C1.c1, sizeof(C1.c1));
-    //show_str("Ciphertext C2 : ", C1.c2, sizeof(C1.c2));
+    show_str("Ciphertext C1 : ", C1.c1, sizeof(C1.c1));
+    show_str("Ciphertext C2 : ", C1.c2, sizeof(C1.c2));
 
     //uint8_t decrypted_msg[2 * NUM_ECC_BYTES];
     printf("\n========= DECRYPTION PARAMETERS =============\n");
