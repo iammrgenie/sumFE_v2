@@ -351,6 +351,9 @@ uECC_word_t cond_set(uECC_word_t p_true, uECC_word_t p_false, unsigned int cond)
 uECC_word_t uECC_vli_sub(uECC_word_t *result, const uECC_word_t *left,
 			 const uECC_word_t *right, wordcount_t num_words);
 
+uECC_word_t uECC_vli_add(uECC_word_t *result, const uECC_word_t *left,
+				const uECC_word_t *right, wordcount_t num_words);
+
 /*
  * @brief Constant-time comparison function(secure way to compare long ints)
  * @param left IN -- left term in comparison

@@ -152,7 +152,8 @@ uECC_word_t uECC_vli_sub(uECC_word_t *result, const uECC_word_t *left,
 
 /* Computes result = left + right, returning carry, in constant time.
  * Can modify in place. */
-static uECC_word_t uECC_vli_add(uECC_word_t *result, const uECC_word_t *left,
+//static 
+uECC_word_t uECC_vli_add(uECC_word_t *result, const uECC_word_t *left,
 				const uECC_word_t *right, wordcount_t num_words)
 {
 	uECC_word_t carry = 0;
