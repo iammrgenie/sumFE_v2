@@ -13,7 +13,7 @@
 
 #define default_RNG_defined 1
 
-#define PRECOMP 5
+#define PRECOMP 10
 
 //Definition of a ciphertext
 typedef struct {
@@ -21,12 +21,11 @@ typedef struct {
     uint8_t c2[2 * NUM_ECC_BYTES];
 } Ciphertext;
 
-// void genPreComputedValues(uECC_Curve curve, mpz_t p, int size, mpz_t *values){
-//     for (unsigned long int i = 0; i < size; i++){
-//         mpz_init(values[i]);
-//         mpz_powm_ui(values[i], g, i, p);
-//     }
-// }
+typedef struct {
+    uECC_word_t plaintext[NUM_ECC_WORDS * 2];
+    uint8_t p[2 * NUM_ECC_BYTES];
+} _decipher;
+
 
 int default_CSPRNG(uint8_t *dest, unsigned int size) 
 {
@@ -139,7 +138,7 @@ int genPK(uint8_t *sk, uint8_t *out, const uECC_word_t *P, uECC_Curve curve){
     return 1;
 }
 
-int mapPlainText(uECC_word_t *in, uECC_Curve curve, uint8_t * out) {
+int mapPlainText(uECC_word_t *in, uECC_Curve curve, uint8_t *out) {
     uECC_word_t tmp1[NUM_ECC_WORDS];
  	uECC_word_t tmp2[NUM_ECC_WORDS];
 	uECC_word_t *p2[2] = {tmp1, tmp2};
@@ -246,15 +245,6 @@ int _Decrypt(uint8_t * sk, uECC_Curve curve, Ciphertext *C){
 
     conuECC2Uint(_tmp2, curve, res); 
     show_str("M ", res, sizeof(res));
-
-    // for(int i = 0; i < PRECOMP; i++)
-    // {
-    //     //int p = mpz_cmp(values[i],res3);
-    //     if (p == 0) {
-    //         output = i;
-    //         break;
-    //     }
-    // }
     
     return 1;
 }
@@ -275,6 +265,7 @@ PROCESS_THREAD(sum_FE, ev, data){
     //Initialize curve for computations
     const struct uECC_Curve_t * curve = uECC_secp256r1();
 
+
     uint8_t secKey[NUM_ECC_BYTES];
     uint8_t pubKey[2 * NUM_ECC_BYTES];
 
@@ -286,7 +277,7 @@ PROCESS_THREAD(sum_FE, ev, data){
     show_str("ECC Public Key 1 ", pubKey, sizeof(pubKey));
 
     //Generate random value
-    uECC_word_t x_i = rand() % 50;
+    uECC_word_t x_i = 1;
     printf("Generated Plaintext (X_I) = %d\n", x_i);
 
     uint8_t mapX_I[2 * NUM_ECC_BYTES];
