@@ -1,7 +1,8 @@
 #include "contiki.h"
+#include "c25519.h"
+#include "ed25519.h"
+#include "f25519.h"
 #include "ecc.h"
-#include "test_ecc_utils.h"
-#include "test_uti.h"
 
 #include <stdio.h>             
 #include <assert.h> 
@@ -11,213 +12,128 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#define default_RNG_defined 1
-
-#define PRECOMP 10
 
 //Definition of a ciphertext
 typedef struct {
-    uint8_t c1[2 * NUM_ECC_BYTES];
-    uint8_t c2[2 * NUM_ECC_BYTES];
+    struct ed25519_pt *C1;
+    struct ed25519_pt *C2;
 } Ciphertext;
 
-typedef struct {
-    uECC_word_t plaintext[NUM_ECC_WORDS * 2];
-    uint8_t p[2 * NUM_ECC_BYTES];
-} _decipher;
-
-
-int default_CSPRNG(uint8_t *dest, unsigned int size) 
+void show_point(const char *label, struct ed25519_pt *in)
 {
-
-  /* input sanity check: */
-  if (dest == (uint8_t *) 0 || (size <= 0))
-    return 0;
-
-  int i;
-
-  for (i = 0; i < size; ++i)
-  {
-    dest[i] = rand();
-  }
-
-  return 1;
+    uint8_t x[F25519_SIZE], y[F25519_SIZE];
+    ed25519_unproject(x, y, in);
+    
+    int i;
+    printf("%s = ", label);
+    printf("(");
+    for (i = 0; i < F25519_SIZE; i++)
+        printf("%02x", x[i]);
+    printf(", ");
+    for (i = 0; i < F25519_SIZE; i++)
+        printf("%02x", y[i]);
+    printf(")\n");
 }
 
-int conUint2uECC(uint8_t *in, uECC_Curve curve, uECC_word_t *out){
-    uECC_vli_bytesToNative(out, in, curve->num_bytes);
-    uECC_vli_bytesToNative(out + curve->num_words, in + curve->num_bytes, curve->num_bytes);
-    return 1;
+void show_str(const char *label, const uint8_t *s, size_t len)
+{
+        unsigned int i;
+
+        printf("%s = ", label);
+        for (i = 0; i < (unsigned int) len; ++i) {
+                printf("%02x", s[i]);
+        }
+        printf("\n");
 }
 
-int conuECC2Uint(uECC_word_t *in, uECC_Curve curve, uint8_t *out) {
-    uECC_vli_nativeToBytes(out, curve->num_bytes, in);
-    uECC_vli_nativeToBytes(out + curve->num_bytes, curve->num_bytes, in + curve->num_words);
-    return 1;
-}
-
-int gen_random_secret(uint8_t *sk, uECC_Curve curve){
-    uECC_word_t _random[NUM_ECC_WORDS * 2];
-    uECC_word_t priv[NUM_ECC_WORDS];
-
-    uECC_word_t try;
-
-    for (try = 0; try < uECC_RNG_MAX_TRIES; ++try){
-        uECC_RNG_Function rng_function = uECC_get_rng();
-
-        if (!rng_function || !rng_function((uint8_t*)_random, 2 * NUM_ECC_WORDS * uECC_WORD_SIZE)){
-            return 0;
-        } 
-
-        //Reduce _random to fit priv
-        uECC_vli_mmod(priv, _random, curve->n, BITS_TO_WORDS(curve->num_n_bits));
-
-        //Convert uECC word to uint8_t
-        uECC_vli_nativeToBytes(sk, BITS_TO_BYTES(curve->num_n_bits), priv);
-
-        //Erase temporary buffer used to store the private key
-        memset(priv, 0, NUM_ECC_BYTES);
+//Function to generate a secret value
+int genKey(uint8_t *key){
+    for (int i = 0; i < ED25519_EXPONENT_SIZE; i++){
+        key[i] = rand();
     }
+    c25519_prepare(key);
 
-    return 0;
+    return 1;
+
 }
 
-int genPK(uint8_t *sk, uint8_t *out, const uECC_word_t *P, uECC_Curve curve){
-    uECC_word_t _public[NUM_ECC_WORDS * 2];
-    uECC_word_t _priv[NUM_ECC_WORDS];
+//Function to compute scalar multiplication
+int computePoint(uint8_t *inB, struct ed25519_pt *inP, struct ed25519_pt *outP) {
+    ed25519_smult(outP, inP, inB);
+    return 1;
+}
 
-    uECC_word_t tmp1[NUM_ECC_WORDS];
- 	uECC_word_t tmp2[NUM_ECC_WORDS];
-	uECC_word_t *p2[2] = {tmp1, tmp2};
-	uECC_word_t carry;
+//Function to encrypt a message
+int _Encrypt(struct ed25519_pt *msg, struct ed25519_pt *pk, struct ed25519_pt *C, uint8_t *r) {
+    struct ed25519_pt rY;
+    struct ed25519_pt res;
+
+    //compute rY
+    ed25519_smult(&rY, pk, r);
+    //show_point("rY", &rY);
+
+    //compute M + rY
+    ed25519_add(&res, msg, &rY);
+    show_point("Q (M + rY)", &res);
+
+    //copy contents of res into the second component of the Ciphertext struct
+    ed25519_copy(C, &res);
+
+    return 1;
+}
+
+//Function to decrypt the ciphertext
+int _Decrypt(uint8_t *sk, struct ed25519_pt *rG, struct ed25519_pt *C){
+    uint8_t negS[F25519_SIZE], rY_x[F25519_SIZE], rY_y[F25519_SIZE];
+    struct ed25519_pt rY;
+    struct ed25519_pt _rY;
+    struct ed25519_pt res;
+
+    //============== Compute -sP where P = rG
+    //compute rY = sP
+    ed25519_smult(&rY, rG, sk);
+    //show_point("rY", &rY);
+
+    ed25519_unproject(rY_x, rY_y, &rY);
+    
+    // compute _rY = -sP
+    f25519_neg(negS, rY_x);
+    ed25519_project(&_rY, negS, rY_y);
+
+    //Compute res = -sP + Q
+    ed25519_add(&res, C, &_rY);
+    show_point("Decrypted M", &res);
+    
+    return 1;
+}
+
+//Function to add 2 points on the Twisted Edwards Curve
+int _addPoints(struct ed25519_pt *in1, struct ed25519_pt *in2, struct ed25519_pt *out){
+    struct ed25519_pt res;
+
+    ed25519_add(&res, in1, in2);
+    ed25519_copy(out, &res);
+
+    return 1;
+}
+
+int _addBigInt(uint8_t *key1, uint8_t *key2, uint8_t *outkey){
+    unsigned int k1[NUM_ECC_WORDS];
+    unsigned int k2[NUM_ECC_WORDS];
+    unsigned int out[NUM_ECC_WORDS];
 
     //Convert uint8_t to uECC_word for the private key
-    uECC_vli_bytesToNative(_priv, sk, BITS_TO_BYTES(curve->num_n_bits));
+    uECC_vli_bytesToNative(k1, key1, BITS_TO_BYTES(256));
+    uECC_vli_bytesToNative(k2, key2, BITS_TO_BYTES(256));
 
-    //Regularize the bitcount as a measure against side-channel analysis
-    carry = regularize_k(_priv, tmp1, tmp2, curve);
+    uECC_vli_add(out, k1, k2, NUM_ECC_WORDS);
 
-    //ECC point multiplication against G
-    EccPoint_mult(_public, P, p2[!carry], 0, curve->num_n_bits + 1, curve);
-
-    if (EccPoint_isZero(_public, curve)){
-        return 0;
-    }
-
-    //Convert and store the public key
-    conuECC2Uint(_public, curve, out);
-
-    memset(_priv, 0, NUM_ECC_BYTES);
+    //Convert uECC word to uint8_t
+    uECC_vli_nativeToBytes(outkey, BITS_TO_BYTES(256), out);
 
     return 1;
-}
 
-int mapPlainText(uECC_word_t *in, uECC_Curve curve, uint8_t *out) {
-    uECC_word_t tmp1[NUM_ECC_WORDS];
- 	uECC_word_t tmp2[NUM_ECC_WORDS];
-	uECC_word_t *p2[2] = {tmp1, tmp2};
-	uECC_word_t carry;
-
-    uECC_word_t _public[NUM_ECC_WORDS * 2];
-    
-    //Regularize the bitcount as a measure against side-channel analysis
-    carry = regularize_k(in, tmp1, tmp2, curve);
-    
-    //ECC point multiplication against G
-    EccPoint_mult(_public, curve->G, p2[!carry], 0, curve->num_n_bits + 1, curve);
-
-    if (EccPoint_isZero(_public, curve)){
-        printf("Not a point on the curve");
-        return 0;
-    }
-
-    //Convert and store the public key
-    conuECC2Uint(_public, curve, out);
-    
-    return 1;
-}
-
-
-int _Encrypt(uint8_t * in_msg, uint8_t * pk, uECC_Curve curve, Ciphertext *C){
-    uint8_t r[NUM_ECC_BYTES];
-    uint8_t rG[2 * NUM_ECC_BYTES];
-    uint8_t rY[2 * NUM_ECC_BYTES];
-    uECC_word_t Y[NUM_ECC_WORDS * 2];
-
-    uECC_word_t _tmp1[NUM_ECC_WORDS * 2];
-    uECC_word_t _tmp2[NUM_ECC_WORDS * 2];
-    uECC_word_t _tmp3[NUM_ECC_WORDS * 2];
-
-    //generate random variable r in [1, N-1]
-    gen_random_secret(r, curve);
-
-    //compute rG
-    genPK(r, rG, curve->G, curve);
-
-    //convert pk into Y
-    conUint2uECC(pk, curve, Y);
-    
-    //Check conversion
-    if (EccPoint_isZero(Y, curve)){
-        printf("Not a point on the curve");
-        return 0;
-    }
-
-    //Compute rY
-    genPK(r, rY, (const uECC_word_t *)Y, curve);
-
-    //Print Parameters
-    show_str("P = (rG) ", rG, sizeof(rG));
-    show_str("rY ", rY, sizeof(rY));
-
-    //Compute M + rY
-    conUint2uECC(in_msg, curve, _tmp1);
-    conUint2uECC(rY, curve, _tmp2);
-    uECC_vli_add(_tmp3, _tmp1, _tmp2, (NUM_ECC_WORDS * 2));
-
-    uint8_t res[2 * NUM_ECC_BYTES];
-    conuECC2Uint(_tmp3, curve, res); 
-    show_str("Q = (M + rY) ", res, sizeof(res));
-
-    //Store Ciphertext into struct
-    for (wordcount_t x = 0; x < (2 * NUM_ECC_BYTES); x++){
-        C->c1[x] = rG[x];
-        C->c2[x] = res[x];
-    }
-
-    return 0;
-
-}
-
-int _Decrypt(uint8_t * sk, uECC_Curve curve, Ciphertext *C){
-    uECC_word_t _tmp1[NUM_ECC_WORDS * 2];
-    uECC_word_t _tmp2[NUM_ECC_WORDS * 2];
-
-    uint8_t t1[2 * NUM_ECC_BYTES];
-    uint8_t res[2 * NUM_ECC_BYTES];
-
-    uECC_word_t P[NUM_ECC_WORDS * 2];
-    uECC_word_t Q[NUM_ECC_WORDS * 2];
-
-    //Convert ciphertext parameters to uECC
-    conUint2uECC(C->c1, curve, P);
-    conUint2uECC(C->c2, curve, Q);
-
-    //compute t1 = sP where P = rG
-    genPK(sk, t1, (const uECC_word_t *)P, curve);
-    show_str("sP ", t1, sizeof(t1));
-    show_str("Q ", C->c2, sizeof(C->c2));
-
-    //compute res = Q - sP
-    conUint2uECC(t1, curve, _tmp1);
-    uECC_vli_sub(_tmp2, Q, _tmp1, (NUM_ECC_WORDS * 2));
-
-    conuECC2Uint(_tmp2, curve, res); 
-    show_str("Decrypted f_map(x) ", res, sizeof(res));
-    
-    return 1;
-}
-
+} 
 
 PROCESS(sum_FE, "Functional Encryption Process");
 AUTOSTART_PROCESSES(&sum_FE);
@@ -225,43 +141,108 @@ AUTOSTART_PROCESSES(&sum_FE);
 PROCESS_THREAD(sum_FE, ev, data){
     PROCESS_BEGIN();
 
+    srand(85699);
     printf("========= WELCOME TO THE SUMFE APPLICATION =============\n");
     printf("Lets Begin\n");
 
-    srand(88964);
-    uECC_set_rng(&default_CSPRNG);
+    uint8_t skA[F25519_SIZE], skB[F25519_SIZE], fdk[F25519_SIZE];
+    struct ed25519_pt pkA;
+    struct ed25519_pt pkB;
+    struct ed25519_pt pkT;
+    struct ed25519_pt G;
 
-    //Initialize curve for computations
-    const struct uECC_Curve_t * curve = uECC_secp256r1();
+    //Store the value of G
+    ed25519_copy(&G, &ed25519_base);
+
+    //Generate secret keys and public keys
+    genKey(skA);
+    show_str("\nskA", skA, F25519_SIZE);
+    genKey(skB);
+    show_str("skB", skB, F25519_SIZE);
+
+    computePoint(skA, &G, &pkA);
+    show_point("pkA", &pkA);
+    computePoint(skB, &G, &pkB);
+    show_point("pkB", &pkB);
+
+    //Generate Functional Decryption Key
+    _addBigInt(skA, skB, fdk);
+    show_str("\nFDK", fdk, F25519_SIZE);
+
+    //Compute the Master Encryption Key
+    _addPoints(&pkA, &pkB, &pkT);
+    show_point("pkT", &pkT);
+
+    //Test Loading Small constants
+    printf("\n========== Plaintext Inputs =============\n");
+    uint8_t unloaded_a = 15;
+    uint8_t unloaded_b = 25;
+
+    uint8_t loaded_a[F25519_SIZE];
+    uint8_t loaded_b[F25519_SIZE];
+
+    f25519_load(loaded_a, unloaded_a);
+    f25519_load(loaded_b, unloaded_b);
+
+    show_str("x_1", loaded_a, F25519_SIZE);
+    show_str("x_2", loaded_b, F25519_SIZE);
+
+    struct ed25519_pt map1;
+    struct ed25519_pt map2;
+    struct ed25519_pt mapT;
+
+    computePoint(loaded_a, &G, &map1);
+    computePoint(loaded_b, &G, &map2);
+    show_point("X_1", &map1);
+    show_point("X_2", &map2);
+
+    uint8_t _sum[F25519_SIZE];
+    _addBigInt(loaded_a, loaded_b, _sum);
+    show_str("x_1 + x_2", _sum, F25519_SIZE);
+    computePoint(_sum, &G, &mapT);
+    show_point("X_1 + X_2", &mapT);
+   
+    // //==================================================
+    // //El-Gamal Encryption Process
+    uint8_t r[F25519_SIZE];
+    struct ed25519_pt rG;
+    struct ed25519_pt c1;
+    struct ed25519_pt c2;
+    struct ed25519_pt cS;
+
+    printf("\n========== El-Gamal Encryption Process =============\n");
+    //compute r and rG
+    genKey(r);
+    show_str("r", r, F25519_SIZE);
+
+    computePoint(r, &G, &rG);
+    show_point("P (rG)", &rG);
+
+    printf("Encryption 1\n");
+    _Encrypt(&map1, &pkA, &c1, r);
+    printf("Encryption 2\n");
+    _Encrypt(&map2, &pkB, &c2, r);
+    printf("Encryption of Sum\n");
+    // printf("Test Sum Cipher Encryption\n");
+    _Encrypt(&mapT, &pkT, &cS, r);
 
 
-    uint8_t secKey[NUM_ECC_BYTES];
-    uint8_t pubKey[2 * NUM_ECC_BYTES];
+    //==================================================
+    //El-Gamal Decryption Process
+    printf("\n========== El-Gamal Decryption Process =============\n");
+    printf("Decryption 1\n");
+    _Decrypt(skA, &rG, &c1);
+    printf("Decryption 2\n");
+    _Decrypt(skB, &rG, &c2);
+    // printf("Decryption of plaintext sum\n");
+    // _Decrypt(fdk, &rG, &cS);
 
-    gen_random_secret(secKey, curve);
 
-    show_str("ECC Private Key 1 ", secKey, sizeof(secKey));
-
-    genPK(secKey, pubKey, curve->G, curve);
-    show_str("ECC Public Key 1 ", pubKey, sizeof(pubKey));
-
-    //Generate random value
-    uECC_word_t x_i = rand() % 50;
-    printf("Generated Plaintext (X_I) = %d\n", x_i);
-
-    uint8_t mapX_I[2 * NUM_ECC_BYTES];
-    mapPlainText(&x_i, curve, mapX_I);
-    show_str("f_map(x) ", mapX_I, sizeof(mapX_I));
-
-    printf("\n========= ENCRYPTION PARAMETERS =============\n");
-    Ciphertext C1;
-    _Encrypt(mapX_I, pubKey, curve, &C1);
-    show_str("Ciphertext C1 : ", C1.c1, sizeof(C1.c1));
-    show_str("Ciphertext C2 : ", C1.c2, sizeof(C1.c2));
-
-    //uint8_t decrypted_msg[2 * NUM_ECC_BYTES];
-    printf("\n========= DECRYPTION PARAMETERS =============\n");
-    _Decrypt(secKey, curve, &C1);
-
+    printf("\n========== FE Ciphertext Addition and Decryption Process =============\n");
+    struct ed25519_pt cT;
+    _addPoints(&c1, &c2, &cT);
+    show_point("C1 + C2", &cT);
+    _Decrypt(fdk, &rG, &cT);
+    
     PROCESS_END();
 }
