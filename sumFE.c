@@ -4,6 +4,7 @@
 #include "f25519.h"
 #include "ecc.h"
 
+
 #include <stdio.h>             
 #include <assert.h> 
 #include <stdlib.h>
@@ -18,6 +19,7 @@ typedef struct {
     struct ed25519_pt *C1;
     struct ed25519_pt *C2;
 } Ciphertext;
+
 
 void show_point(const char *label, struct ed25519_pt *in)
 {
@@ -48,13 +50,13 @@ void show_str(const char *label, const uint8_t *s, size_t len)
 
 //Function to generate a secret value
 int genKey(uint8_t *key){
-    for (int i = 0; i < ED25519_EXPONENT_SIZE; i++){
-        key[i] = rand();
+    for (int i = 0; i < F25519_SIZE; i++){
+        key[i] = rand() % 99;
     }
+
     c25519_prepare(key);
 
     return 1;
-
 }
 
 //Function to compute scalar multiplication
@@ -70,7 +72,6 @@ int _Encrypt(struct ed25519_pt *msg, struct ed25519_pt *pk, struct ed25519_pt *C
 
     //compute rY
     ed25519_smult(&rY, pk, r);
-    //show_point("rY", &rY);
 
     //compute M + rY
     ed25519_add(&res, msg, &rY);
@@ -92,7 +93,6 @@ int _Decrypt(uint8_t *sk, struct ed25519_pt *rG, struct ed25519_pt *C){
     //============== Compute -sP where P = rG
     //compute rY = sP
     ed25519_smult(&rY, rG, sk);
-    //show_point("rY", &rY);
 
     ed25519_unproject(rY_x, rY_y, &rY);
     
@@ -141,7 +141,7 @@ AUTOSTART_PROCESSES(&sum_FE);
 PROCESS_THREAD(sum_FE, ev, data){
     PROCESS_BEGIN();
 
-    srand(85699);
+    srand(864429);
     printf("========= WELCOME TO THE SUMFE APPLICATION =============\n");
     printf("Lets Begin\n");
 
@@ -153,15 +153,25 @@ PROCESS_THREAD(sum_FE, ev, data){
 
     //Store the value of G
     ed25519_copy(&G, &ed25519_base);
-
-    //Generate secret keys and public keys
+    
+    // Generate secret keys and public keys 
+    clock_time_t start_time = clock_time();
     genKey(skA);
     show_str("\nskA", skA, F25519_SIZE);
     genKey(skB);
     show_str("skB", skB, F25519_SIZE);
 
+    clock_time_t end_time = clock_time(); 
+    unsigned long time_taken = end_time - start_time;
+    printf("Time Taken to Generate 2 Keys: %lu ticks\n", time_taken);
+
+    clock_time_t st = clock_time();
     computePoint(skA, &G, &pkA);
     show_point("pkA", &pkA);
+    clock_time_t et = clock_time(); 
+    unsigned long tt = et - st;
+    printf("Time Taken to Generate A Public Key: %lu ticks\n", tt);
+
     computePoint(skB, &G, &pkB);
     show_point("pkB", &pkB);
 
@@ -173,10 +183,10 @@ PROCESS_THREAD(sum_FE, ev, data){
     _addPoints(&pkA, &pkB, &pkT);
     show_point("pkT", &pkT);
 
-    //Test Loading Small constants
+    //Generate random plaintext values
     printf("\n========== Plaintext Inputs =============\n");
-    uint8_t unloaded_a = 15;
-    uint8_t unloaded_b = 25;
+    uint8_t unloaded_a = rand() & 50;
+    uint8_t unloaded_b = rand() % 50;
 
     uint8_t loaded_a[F25519_SIZE];
     uint8_t loaded_b[F25519_SIZE];
@@ -208,10 +218,11 @@ PROCESS_THREAD(sum_FE, ev, data){
     struct ed25519_pt rG;
     struct ed25519_pt c1;
     struct ed25519_pt c2;
-    struct ed25519_pt cS;
+    //struct ed25519_pt cS;
 
     printf("\n========== El-Gamal Encryption Process =============\n");
     //compute r and rG
+    clock_time_t st1 = clock_time();
     genKey(r);
     show_str("r", r, F25519_SIZE);
 
@@ -220,29 +231,37 @@ PROCESS_THREAD(sum_FE, ev, data){
 
     printf("Encryption 1\n");
     _Encrypt(&map1, &pkA, &c1, r);
+    clock_time_t et1 = clock_time();
+    unsigned long tt1 = et1 - st1;
+    printf("Time Taken to Encrypt: %lu ticks\n", tt1);
+
     printf("Encryption 2\n");
     _Encrypt(&map2, &pkB, &c2, r);
-    printf("Encryption of Sum\n");
-    // printf("Test Sum Cipher Encryption\n");
-    _Encrypt(&mapT, &pkT, &cS, r);
-
+    // printf("Encryption of Sum\n");
+    // _Encrypt(&mapT, &pkT, &cS, r);
 
     //==================================================
     //El-Gamal Decryption Process
     printf("\n========== El-Gamal Decryption Process =============\n");
+    clock_time_t st2 = clock_time();
     printf("Decryption 1\n");
     _Decrypt(skA, &rG, &c1);
+    clock_time_t et2 = clock_time();
+    unsigned long tt2 = et2 - st2;
+    printf("Time Taken to Decrypt: %lu ticks\n", tt2);
+
     printf("Decryption 2\n");
     _Decrypt(skB, &rG, &c2);
     // printf("Decryption of plaintext sum\n");
     // _Decrypt(fdk, &rG, &cS);
 
-
+    //==================================================
+    //FE Decryption and Addition Process
     printf("\n========== FE Ciphertext Addition and Decryption Process =============\n");
     struct ed25519_pt cT;
     _addPoints(&c1, &c2, &cT);
     show_point("C1 + C2", &cT);
     _Decrypt(fdk, &rG, &cT);
-    
+
     PROCESS_END();
 }
