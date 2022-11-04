@@ -3,6 +3,7 @@
 #include "ed25519.h"
 #include "f25519.h"
 #include "ecc.h"
+#include "energest.h"
 
 
 #include <stdio.h>             
@@ -20,6 +21,10 @@ typedef struct {
     struct ed25519_pt *C2;
 } Ciphertext;
 
+static unsigned long to_seconds(uint64_t time)
+{
+  return (unsigned long)(time / ENERGEST_SECOND);
+}
 
 void show_point(const char *label, struct ed25519_pt *in)
 {
@@ -262,6 +267,21 @@ PROCESS_THREAD(sum_FE, ev, data){
     _addPoints(&c1, &c2, &cT);
     show_point("C1 + C2", &cT);
     _Decrypt(fdk, &rG, &cT);
+
+    energest_flush();
+
+    printf("\nEnergest Measurements:\n");
+    printf(" CPU          %4lus LPM      %4lus DEEP LPM %4lus  Total time %lus\n",
+           to_seconds(energest_type_time(ENERGEST_TYPE_CPU)),
+           to_seconds(energest_type_time(ENERGEST_TYPE_LPM)),
+           to_seconds(energest_type_time(ENERGEST_TYPE_DEEP_LPM)),
+           to_seconds(ENERGEST_GET_TOTAL_TIME()));
+    printf(" Radio LISTEN %4lus TRANSMIT %4lus OFF      %4lus\n",
+           to_seconds(energest_type_time(ENERGEST_TYPE_LISTEN)),
+           to_seconds(energest_type_time(ENERGEST_TYPE_TRANSMIT)),
+           to_seconds(ENERGEST_GET_TOTAL_TIME()
+                      - energest_type_time(ENERGEST_TYPE_TRANSMIT)
+                      - energest_type_time(ENERGEST_TYPE_LISTEN)));
 
     PROCESS_END();
 }
