@@ -146,7 +146,7 @@ AUTOSTART_PROCESSES(&sum_FE);
 PROCESS_THREAD(sum_FE, ev, data){
     PROCESS_BEGIN();
 
-    srand(864429);
+    srand(86329);
     printf("========= WELCOME TO THE SUMFE APPLICATION =============\n");
     printf("Lets Begin\n");
 
@@ -176,8 +176,8 @@ PROCESS_THREAD(sum_FE, ev, data){
     show_point("pkA", &pkA);
     clock_time_t et = clock_time(); 
     unsigned long tt = et - st;
-    float time3 = (float)tt;
-    printf("Time Taken to Generate A Public Key: %f seconds\n", time3/128);
+    //float time3 = (float)tt;
+    printf("Time Taken to Generate A Public Key: %lu ticks\n", tt);
 
     computePoint(skB, &G, &pkB);
     show_point("pkB", &pkB);
@@ -240,8 +240,8 @@ PROCESS_THREAD(sum_FE, ev, data){
     _Encrypt(&map1, &pkA, &c1, r);
     clock_time_t et1 = clock_time();
     unsigned long tt1 = et1 - st1;
-    float time4 = (float)tt1;
-    printf("Time Taken to Encrypt: %f seconds\n", time4/128);
+    //float time4 = (float)tt1;
+    printf("Time Taken to Encrypt: %lu ticks\n", tt1);
 
     printf("Encryption 2\n");
     _Encrypt(&map2, &pkB, &c2, r);
@@ -256,8 +256,8 @@ PROCESS_THREAD(sum_FE, ev, data){
     _Decrypt(skA, &rG, &c1);
     clock_time_t et2 = clock_time();
     unsigned long tt2 = et2 - st2;
-    float time5 = (float)tt2;
-    printf("Time Taken to Decrypt: %f seconds\n", time5/128);
+    //float time5 = (float)tt2;
+    printf("Time Taken to Decrypt: %lu ticks\n", tt2);
 
     printf("Decryption 2\n");
     _Decrypt(skB, &rG, &c2);
@@ -272,9 +272,9 @@ PROCESS_THREAD(sum_FE, ev, data){
     _addPoints(&c1, &c2, &cT);
     clock_time_t et3 = clock_time();
     unsigned long tt3 = et3 - st3;
-    float time1 = (float)tt3;
+    //float time1 = (float)tt3;
     show_point("C1 + C2", &cT);
-    printf("Time Taken to perform Ciphertext Addition: %f seconds\n", time1/128);
+    printf("Time Taken to perform Ciphertext Addition: %lu ticks\n", tt3);
     
     _Decrypt(fdk, &rG, &cT);
 

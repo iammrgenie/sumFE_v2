@@ -1,1 +1,2 @@
-TARGET = native
+TARGET = zoul
+BOARD = remote-revb
