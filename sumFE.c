@@ -168,14 +168,16 @@ PROCESS_THREAD(sum_FE, ev, data){
 
     clock_time_t end_time = clock_time(); 
     unsigned long time_taken = end_time - start_time;
-    printf("Time Taken to Generate 2 Keys: %lu ticks\n", time_taken);
+    float time2 = (float)time_taken;
+    printf("Time Taken to Generate 2 Keys: %f seconds\n", time2/128);
 
     clock_time_t st = clock_time();
     computePoint(skA, &G, &pkA);
     show_point("pkA", &pkA);
     clock_time_t et = clock_time(); 
     unsigned long tt = et - st;
-    printf("Time Taken to Generate A Public Key: %lu ticks\n", tt);
+    float time3 = (float)tt;
+    printf("Time Taken to Generate A Public Key: %f seconds\n", time3/128);
 
     computePoint(skB, &G, &pkB);
     show_point("pkB", &pkB);
@@ -238,7 +240,8 @@ PROCESS_THREAD(sum_FE, ev, data){
     _Encrypt(&map1, &pkA, &c1, r);
     clock_time_t et1 = clock_time();
     unsigned long tt1 = et1 - st1;
-    printf("Time Taken to Encrypt: %lu ticks\n", tt1);
+    float time4 = (float)tt1;
+    printf("Time Taken to Encrypt: %f seconds\n", time4/128);
 
     printf("Encryption 2\n");
     _Encrypt(&map2, &pkB, &c2, r);
@@ -253,7 +256,8 @@ PROCESS_THREAD(sum_FE, ev, data){
     _Decrypt(skA, &rG, &c1);
     clock_time_t et2 = clock_time();
     unsigned long tt2 = et2 - st2;
-    printf("Time Taken to Decrypt: %lu ticks\n", tt2);
+    float time5 = (float)tt2;
+    printf("Time Taken to Decrypt: %f seconds\n", time5/128);
 
     printf("Decryption 2\n");
     _Decrypt(skB, &rG, &c2);
@@ -264,8 +268,14 @@ PROCESS_THREAD(sum_FE, ev, data){
     //FE Decryption and Addition Process
     printf("\n========== FE Ciphertext Addition and Decryption Process =============\n");
     struct ed25519_pt cT;
+    clock_time_t st3 = clock_time();
     _addPoints(&c1, &c2, &cT);
+    clock_time_t et3 = clock_time();
+    unsigned long tt3 = et3 - st3;
+    float time1 = (float)tt3;
     show_point("C1 + C2", &cT);
+    printf("Time Taken to perform Ciphertext Addition: %f seconds\n", time1/128);
+    
     _Decrypt(fdk, &rG, &cT);
 
     energest_flush();
