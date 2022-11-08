@@ -14,12 +14,17 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#define CNT 2
+
 
 //Definition of a ciphertext
 typedef struct {
-    struct ed25519_pt *C1;
-    struct ed25519_pt *C2;
-} Ciphertext;
+    uint8_t skey[F25519_SIZE];
+    uint8_t plain[F25519_SIZE];
+    struct ed25519_pt pkey;
+    struct ed25519_pt x_map;
+    struct ed25519_pt C;
+} Experim;
 
 static unsigned long to_seconds(uint64_t time)
 {
@@ -56,7 +61,7 @@ void show_str(const char *label, const uint8_t *s, size_t len)
 //Function to generate a secret value
 int genKey(uint8_t *key){
     for (int i = 0; i < F25519_SIZE; i++){
-        key[i] = rand() % 99;
+        key[i] = rand() % 20;
     }
 
     c25519_prepare(key);
@@ -146,137 +151,124 @@ AUTOSTART_PROCESSES(&sum_FE);
 PROCESS_THREAD(sum_FE, ev, data){
     PROCESS_BEGIN();
 
-    srand(86329);
+    Experim Test1[CNT];                     //Initate number of users for the experiments
+
+    srand(882099);
     printf("========= WELCOME TO THE SUMFE APPLICATION =============\n");
     printf("Lets Begin\n");
 
-    uint8_t skA[F25519_SIZE], skB[F25519_SIZE], fdk[F25519_SIZE];
-    struct ed25519_pt pkA;
-    struct ed25519_pt pkB;
-    struct ed25519_pt pkT;
     struct ed25519_pt G;
 
     //Store the value of G
     ed25519_copy(&G, &ed25519_base);
+
+    //==================================================
+    //Key Generation Process
+    printf("\n========== Key Generation =============\n");
+    clock_time_t st1 = clock_time();
     
-    // Generate secret keys and public keys 
-    clock_time_t start_time = clock_time();
-    genKey(skA);
-    show_str("\nskA", skA, F25519_SIZE);
-    genKey(skB);
-    show_str("skB", skB, F25519_SIZE);
+    for (int i = 0; i < CNT; i++){
+        genKey(Test1[i].skey);
+        printf("\nUser %d's ", i);
+        show_str("Secret Key ", Test1[i].skey, F25519_SIZE);
 
-    clock_time_t end_time = clock_time(); 
-    unsigned long time_taken = end_time - start_time;
-    float time2 = (float)time_taken;
-    printf("Time Taken to Generate 2 Keys: %f seconds\n", time2/128);
+        computePoint(Test1[i].skey, &G, &Test1[i].pkey);
+        show_point("Public Key", &Test1[i].pkey);
+    }
 
-    clock_time_t st = clock_time();
-    computePoint(skA, &G, &pkA);
-    show_point("pkA", &pkA);
-    clock_time_t et = clock_time(); 
-    unsigned long tt = et - st;
-    //float time3 = (float)tt;
-    printf("Time Taken to Generate A Public Key: %lu ticks\n", tt);
-
-    computePoint(skB, &G, &pkB);
-    show_point("pkB", &pkB);
-
-    //Generate Functional Decryption Key
-    _addBigInt(skA, skB, fdk);
-    show_str("\nFDK", fdk, F25519_SIZE);
-
-    //Compute the Master Encryption Key
-    _addPoints(&pkA, &pkB, &pkT);
-    show_point("pkT", &pkT);
+    clock_time_t et1 = clock_time();
+    unsigned long tt1 = et1 - st1;
+    printf("\nTime Taken to Generate %d Key(s): %lu ticks\n", CNT, tt1);
 
     //Generate random plaintext values
     printf("\n========== Plaintext Inputs =============\n");
-    uint8_t unloaded_a = rand() & 50;
-    uint8_t unloaded_b = rand() % 50;
-
-    uint8_t loaded_a[F25519_SIZE];
-    uint8_t loaded_b[F25519_SIZE];
-
-    f25519_load(loaded_a, unloaded_a);
-    f25519_load(loaded_b, unloaded_b);
-
-    show_str("x_1", loaded_a, F25519_SIZE);
-    show_str("x_2", loaded_b, F25519_SIZE);
-
-    struct ed25519_pt map1;
-    struct ed25519_pt map2;
-    struct ed25519_pt mapT;
-
-    computePoint(loaded_a, &G, &map1);
-    computePoint(loaded_b, &G, &map2);
-    show_point("X_1", &map1);
-    show_point("X_2", &map2);
-
     uint8_t _sum[F25519_SIZE];
-    _addBigInt(loaded_a, loaded_b, _sum);
-    show_str("x_1 + x_2", _sum, F25519_SIZE);
-    computePoint(_sum, &G, &mapT);
-    show_point("X_1 + X_2", &mapT);
-   
-    // //==================================================
-    // //El-Gamal Encryption Process
+    struct ed25519_pt plainT;
+
+    for (int j = 0; j < CNT; j++){
+        uint8_t unloaded_x = rand() & 75;
+        f25519_load(Test1[j].plain, unloaded_x);
+
+        printf("User %d's ", j);
+        show_str("x_1", Test1[j].plain, F25519_SIZE);
+
+        computePoint(Test1[j].plain, &G, &Test1[j].x_map);
+        show_point("X_1", &Test1[j].x_map);
+    }
+
+    f25519_copy(_sum, Test1[0].plain);
+     for (int i = 1; i < CNT; i ++){
+        _addBigInt(Test1[i].plain, _sum, _sum);
+    }
+
+    show_str("Sum of Plaintexts", _sum, F25519_SIZE);
+    computePoint(_sum, &G, &plainT);
+    show_point("Mapping of Sum", &plainT);
+
+    //==================================================
+    //Encryption Process
     uint8_t r[F25519_SIZE];
     struct ed25519_pt rG;
-    struct ed25519_pt c1;
-    struct ed25519_pt c2;
-    //struct ed25519_pt cS;
 
-    printf("\n========== El-Gamal Encryption Process =============\n");
+    printf("\n========== Basic Encryption Process =============\n");
     //compute r and rG
-    clock_time_t st1 = clock_time();
+    clock_time_t st2 = clock_time();
     genKey(r);
     show_str("r", r, F25519_SIZE);
 
     computePoint(r, &G, &rG);
     show_point("P (rG)", &rG);
 
-    printf("Encryption 1\n");
-    _Encrypt(&map1, &pkA, &c1, r);
-    clock_time_t et1 = clock_time();
-    unsigned long tt1 = et1 - st1;
-    //float time4 = (float)tt1;
-    printf("Time Taken to Encrypt: %lu ticks\n", tt1);
+    for (int i = 0; i < CNT; i++){
+        _Encrypt(&Test1[i].x_map, &Test1[i].pkey, &Test1[i].C, r);
+    }
 
-    printf("Encryption 2\n");
-    _Encrypt(&map2, &pkB, &c2, r);
-    // printf("Encryption of Sum\n");
-    // _Encrypt(&mapT, &pkT, &cS, r);
-
-    //==================================================
-    //El-Gamal Decryption Process
-    printf("\n========== El-Gamal Decryption Process =============\n");
-    clock_time_t st2 = clock_time();
-    printf("Decryption 1\n");
-    _Decrypt(skA, &rG, &c1);
     clock_time_t et2 = clock_time();
     unsigned long tt2 = et2 - st2;
-    //float time5 = (float)tt2;
-    printf("Time Taken to Decrypt: %lu ticks\n", tt2);
+    printf("\nTime Taken to Encrypt %d plaintext(s): %lu ticks\n", CNT, tt2);
 
-    printf("Decryption 2\n");
-    _Decrypt(skB, &rG, &c2);
-    // printf("Decryption of plaintext sum\n");
-    // _Decrypt(fdk, &rG, &cS);
 
     //==================================================
-    //FE Decryption and Addition Process
-    printf("\n========== FE Ciphertext Addition and Decryption Process =============\n");
-    struct ed25519_pt cT;
+    // Decryption Process
+    printf("\n========== Basic Decryption Process =============\n");
+    
     clock_time_t st3 = clock_time();
-    _addPoints(&c1, &c2, &cT);
+
+    for (int i = 0; i < CNT; i++){
+        _Decrypt(Test1[i].skey, &rG, &Test1[i].C);
+    }
+
     clock_time_t et3 = clock_time();
     unsigned long tt3 = et3 - st3;
-    //float time1 = (float)tt3;
-    show_point("C1 + C2", &cT);
-    printf("Time Taken to perform Ciphertext Addition: %lu ticks\n", tt3);
+    printf("\nTime Taken to Decrypt %d ciphertext(s): %lu ticks\n", CNT, tt3);
     
+
+    //==================================================
+    //FE Decryption Process
+    printf("\n========== FE Ciphertext Decryption Process =============\n");
+    
+    uint8_t fdk[F25519_SIZE];
+    struct ed25519_pt cT;
+
+    clock_time_t st4 = clock_time();
+    f25519_copy(fdk, Test1[0].skey);
+    ed25519_copy(&cT, &Test1[0].C);
+
+    // show_str("x_1 + x_2", _sum, F25519_SIZE);
+    // show_str("FDK", fdk, F25519_SIZE);
+
+    for (int i = 1; i < CNT; i ++){
+        _addBigInt(Test1[i].skey, fdk, fdk);
+        _addPoints(&Test1[i].C, &cT, &cT);
+    }
+
+    show_point("Ciphertexts Sum", &cT);
+    show_str("FDK", fdk, F25519_SIZE);
     _Decrypt(fdk, &rG, &cT);
+    clock_time_t et4 = clock_time();
+
+    unsigned long tt4 = et4 - st4;
+    printf("\nTime Taken to execute FE Decryption for %d ciphertext(s): %lu ticks\n", CNT, tt4);
 
     energest_flush();
 
