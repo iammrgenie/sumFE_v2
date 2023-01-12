@@ -1,1 +1,2 @@
-TARGET = native
+TARGET = nrf52840
+BOARD = dk

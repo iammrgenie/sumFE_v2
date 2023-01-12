@@ -14,7 +14,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#define CNT 2
+#define CNT 25
 
 
 //Definition of a ciphertext

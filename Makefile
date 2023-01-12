@@ -1,4 +1,4 @@
-CONTIKI_PROJECT = sumFE-native
+CONTIKI_PROJECT = sumFE
 
 all: $(CONTIKI_PROJECT)
 
