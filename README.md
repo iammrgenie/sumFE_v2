@@ -29,6 +29,6 @@ Tinycrypt library: https://github.com/intel/tinycrypt
 
 ## Authors
 
-* Eugene Frimpong (Tampere University, Tampere, Finland)
-* Alexandros Bakas (Tampere University, Tampere, Finland)
+<!-- * Eugene Frimpong (Tampere University, Tampere, Finland)
+* Alexandros Bakas (Tampere University, Tampere, Finland) -->
 

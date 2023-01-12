@@ -4,6 +4,7 @@
 #include "f25519.h"
 #include "ecc.h"
 #include "energest.h"
+#include <time.h>
 
 
 #include <stdio.h>             
@@ -165,7 +166,7 @@ PROCESS_THREAD(sum_FE, ev, data){
     //==================================================
     //Key Generation Process
     printf("\n========== Key Generation =============\n");
-    clock_time_t st1 = clock_time();
+    clock_t st1 = clock();
     
     for (int i = 0; i < CNT; i++){
         genKey(Test1[i].skey);
@@ -176,9 +177,9 @@ PROCESS_THREAD(sum_FE, ev, data){
         show_point("Public Key", &Test1[i].pkey);
     }
 
-    clock_time_t et1 = clock_time();
-    unsigned long tt1 = et1 - st1;
-    printf("\nTime Taken to Generate %d Key Pair(s) -- (Setup): %lu ticks\n", CNT, tt1);
+    clock_t et1 = clock();
+    double tt1 = ((double) (et1 - st1)) / CLOCKS_PER_SEC;
+    printf("\nTime Taken to Generate %d Key Pair(s) -- (Setup): %f seconds\n", CNT, tt1);
 
     //Generate random plaintext values
     printf("\n========== Plaintext Inputs =============\n");
@@ -210,7 +211,7 @@ PROCESS_THREAD(sum_FE, ev, data){
 
     printf("\n========== Encryption Process =============\n");
     //compute r and rG
-    clock_time_t st2 = clock_time();
+    clock_t st2 = clock();
     genKey(r);
     show_str("r", r, F25519_SIZE);
 
@@ -227,28 +228,28 @@ PROCESS_THREAD(sum_FE, ev, data){
         printf("\n");
     }
 
-    clock_time_t et2 = clock_time();
-    unsigned long tt2 = et2 - st2;
-    printf("\nTime Taken to Encrypt %d plaintext(s) -- (Encryption): %lu ticks\n", CNT, tt2);
+    clock_t et2 = clock();
+    double tt2 = ((double) (et2 - st2)) / CLOCKS_PER_SEC;
+    printf("\nTime Taken to Encrypt %d plaintext(s) -- (Encryption): %f seconds\n", CNT, tt2);
 
 
     //==================================================
     // Decryption Process
     printf("\n========== Basic Decryption Process =============\n");
     
-    clock_time_t st3 = clock_time();
+    clock_t st3 = clock();
 
     for (int i = 0; i < CNT; i++){
         _Decrypt(Test1[i].skey, &rG, &Test1[i].C);
     }
 
-    clock_time_t et3 = clock_time();
-    unsigned long tt3 = et3 - st3;
-    printf("\nTime Taken to Decrypt %d ciphertext(s) -- (Not Important): %lu ticks\n", CNT, tt3);
+    clock_t et3 = clock();
+    double tt3 = ((double) (et3 - st3)) / CLOCKS_PER_SEC;
+    printf("\nTime Taken to Decrypt %d ciphertext(s) -- (Not Important): %f seconds\n", CNT, tt3);
     
     //FE Key Generation Process
     printf("\n========== FE Key Generation Process =============\n");
-    clock_time_t stK = clock_time();
+    clock_t stK = clock();
     uint8_t fdk[F25519_SIZE];
     f25519_copy(fdk, Test1[0].skey);
 
@@ -256,11 +257,11 @@ PROCESS_THREAD(sum_FE, ev, data){
         _addBigInt(Test1[i].skey, fdk, fdk);
     }
 
-    clock_time_t etK = clock_time();
+    clock_t etK = clock();
     show_str("FDK", fdk, F25519_SIZE);
 
-    unsigned long ttK = etK - stK;
-    printf("\nTime Taken to generate a Decryption Key -- (KeyGen) for %d user(s): %lu ticks\n", CNT, ttK);
+    double ttK = ((double) (etK - stK)) / CLOCKS_PER_SEC;
+    printf("\nTime Taken to generate a Decryption Key -- (KeyGen) for %d user(s): %f seconds\n", CNT, ttK);
 
 
 
@@ -269,7 +270,7 @@ PROCESS_THREAD(sum_FE, ev, data){
     printf("\n========== FE Ciphertext Decryption Process =============\n");    
     struct ed25519_pt cT;
 
-    clock_time_t st4 = clock_time();
+    clock_t st4 = clock();
     
     ed25519_copy(&cT, &Test1[0].C);
 
@@ -283,10 +284,10 @@ PROCESS_THREAD(sum_FE, ev, data){
 
     show_point("Ciphertexts Sum", &cT);
     _Decrypt(fdk, &rG, &cT);
-    clock_time_t et4 = clock_time();
+    clock_t et4 = clock();
 
-    unsigned long tt4 = et4 - st4;
-    printf("\nTime Taken to execute FE Decryption -- (Decryption) for %d ciphertext(s): %lu ticks\n", CNT, tt4);
+    double tt4 = ((double) (et4 - st4)) / CLOCKS_PER_SEC;
+    printf("\nTime Taken to execute FE Decryption -- (Decryption) for %d ciphertext(s): %f seconds\n", CNT, tt4);
 
     energest_flush();
 
