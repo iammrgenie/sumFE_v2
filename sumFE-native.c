@@ -15,7 +15,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#define CNT 2
+#define CNT 1000
 
 
 //Definition of a ciphertext
@@ -86,7 +86,7 @@ int _Encrypt(struct ed25519_pt *msg, struct ed25519_pt *pk, struct ed25519_pt *C
 
     //compute M + rY
     ed25519_add(&res, msg, &rY);
-    show_point("Q (M + rY)", &res);
+    //show_point("Q (M + rY)", &res);
 
     //copy contents of res into the second component of the Ciphertext struct
     ed25519_copy(C, &res);
@@ -170,11 +170,11 @@ PROCESS_THREAD(sum_FE, ev, data){
     
     for (int i = 0; i < CNT; i++){
         genKey(Test1[i].skey);
-        printf("\nUser %d's ", i);
-        show_str("Secret Key ", Test1[i].skey, F25519_SIZE);
+        //printf("\nUser %d's ", i);
+        //show_str("Secret Key ", Test1[i].skey, F25519_SIZE);
 
         computePoint(Test1[i].skey, &G, &Test1[i].pkey);
-        show_point("Public Key", &Test1[i].pkey);
+        //show_point("Public Key", &Test1[i].pkey);
     }
 
     clock_t et1 = clock();
@@ -190,8 +190,8 @@ PROCESS_THREAD(sum_FE, ev, data){
         uint8_t unloaded_x = rand() & 75;
         f25519_load(Test1[j].plain, unloaded_x);
 
-        printf("User %d's ", j);
-        show_str("x_1", Test1[j].plain, F25519_SIZE);
+        //printf("User %d's ", j);
+        //show_str("x_1", Test1[j].plain, F25519_SIZE);
 
     }
 
@@ -213,19 +213,19 @@ PROCESS_THREAD(sum_FE, ev, data){
     //compute r and rG
     clock_t st2 = clock();
     genKey(r);
-    show_str("r", r, F25519_SIZE);
+    //show_str("r", r, F25519_SIZE);
 
     computePoint(r, &G, &rG);
-    show_point("P (rG)", &rG);
+    //show_point("P (rG)", &rG);
 
     for (int i = 0; i < CNT; i++){
         // Perform the Mapping
         computePoint(Test1[i].plain, &G, &Test1[i].x_map);
-        show_point("X_i (Mapped)", &Test1[i].x_map);
+        //show_point("X_i (Mapped)", &Test1[i].x_map);
 
         //Encrypt
         _Encrypt(&Test1[i].x_map, &Test1[i].pkey, &Test1[i].C, r);
-        printf("\n");
+        //printf("\n");
     }
 
     clock_t et2 = clock();
@@ -233,19 +233,19 @@ PROCESS_THREAD(sum_FE, ev, data){
     printf("\nTime Taken to Encrypt %d plaintext(s) -- (Encryption): %f seconds\n", CNT, tt2);
 
 
-    //==================================================
-    // Decryption Process
-    printf("\n========== Basic Decryption Process =============\n");
+    // //==================================================
+    // // Decryption Process
+    // printf("\n========== Basic Decryption Process =============\n");
     
-    clock_t st3 = clock();
+    // clock_t st3 = clock();
 
-    for (int i = 0; i < CNT; i++){
-        _Decrypt(Test1[i].skey, &rG, &Test1[i].C);
-    }
+    // for (int i = 0; i < CNT; i++){
+    //     _Decrypt(Test1[i].skey, &rG, &Test1[i].C);
+    // }
 
-    clock_t et3 = clock();
-    double tt3 = ((double) (et3 - st3)) / CLOCKS_PER_SEC;
-    printf("\nTime Taken to Decrypt %d ciphertext(s) -- (Not Important): %f seconds\n", CNT, tt3);
+    // clock_t et3 = clock();
+    // double tt3 = ((double) (et3 - st3)) / CLOCKS_PER_SEC;
+    // printf("\nTime Taken to Decrypt %d ciphertext(s) -- (Not Important): %f seconds\n", CNT, tt3);
     
     //FE Key Generation Process
     printf("\n========== FE Key Generation Process =============\n");

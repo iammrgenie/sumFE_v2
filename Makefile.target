@@ -1,2 +1,2 @@
-TARGET = nrf52840
-BOARD = dk
+TARGET = zoul
+BOARD = remote-revb
