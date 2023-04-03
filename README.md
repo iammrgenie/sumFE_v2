@@ -16,7 +16,7 @@ Tinycrypt library: https://github.com/intel/tinycrypt
 # Run sensor experiments
 
 * Specifiy the IoT sensor board and target platform being used for the experiments. This work uses Nordic Semi-Conductor nrf52840dk board
-    `make TARGET=nrf52840 savetarget`
+    `make TARGET=nrf52840  BOARD=dk savetarget`
     
 * Run the the script to run through a number of iterations of the core cryptographic components. Take note of the usb port that the IoT device is connected to (e.g. USB1):\
     `make sumFE.upload PORT="/dev/ttyUSB1"`
